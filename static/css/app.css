@@ -1,0 +1,253 @@
+:root {
+  --sidebar-bg: #1f2937;
+  --sidebar-accent: #2563eb;
+  --panel-border: #d9e2ef;
+  --page-bg: #f4f7fb;
+  --text-soft: #64748b;
+}
+
+body {
+  background: var(--page-bg);
+  color: #0f172a;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.app-sidebar {
+  background: var(--sidebar-bg);
+  color: #f8fafc;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: var(--sidebar-accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+
+.brand-title {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.brand-subtitle {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.app-sidebar .nav {
+  margin-top: 28px;
+}
+
+.app-sidebar .nav-link {
+  color: #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.app-sidebar .nav-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+}
+
+.app-main {
+  min-width: 0;
+}
+
+.topbar {
+  min-height: 58px;
+  background: #fff;
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+}
+
+.content-wrap {
+  padding: 22px;
+}
+
+.filter-panel,
+.chart-panel,
+.table-panel,
+.form-panel,
+.upload-panel,
+.error-panel,
+.kpi-card,
+.info-card {
+  background: #fff;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+}
+
+.filter-panel,
+.chart-panel,
+.table-panel,
+.form-panel,
+.upload-panel,
+.error-panel {
+  padding: 16px;
+}
+
+.filter-panel {
+  position: sticky;
+  top: 80px;
+}
+
+.panel-title {
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.kpi-card,
+.info-card {
+  padding: 16px;
+  min-height: 96px;
+}
+
+.kpi-card span,
+.info-card span {
+  display: block;
+  color: var(--text-soft);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.kpi-card strong,
+.info-card strong {
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.chart-box {
+  height: 420px;
+}
+
+.loading-overlay {
+  position: fixed;
+  inset: 58px 0 0 260px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(244, 247, 251, 0.55);
+}
+
+.table-list .list-group-item.active {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.sql-editor {
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.page-head {
+  margin-bottom: 18px;
+}
+
+.page-head h1 {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.page-head p {
+  color: var(--text-soft);
+  margin-bottom: 0;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #e8f0ff, #f7fafc);
+}
+
+.login-panel {
+  width: min(420px, calc(100vw - 32px));
+  padding: 28px;
+  background: #fff;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+}
+
+.flash-stack {
+  margin: 16px;
+}
+
+.content-wrap .flash-stack {
+  margin: 0 0 16px;
+}
+
+[data-bs-theme="dark"] body,
+body.dark-mode {
+  background: #111827;
+  color: #e5e7eb;
+}
+
+body.dark-mode .topbar,
+body.dark-mode .filter-panel,
+body.dark-mode .chart-panel,
+body.dark-mode .table-panel,
+body.dark-mode .form-panel,
+body.dark-mode .upload-panel,
+body.dark-mode .error-panel,
+body.dark-mode .kpi-card,
+body.dark-mode .info-card {
+  background: #1f2937;
+  border-color: #334155;
+  color: #e5e7eb;
+}
+
+body.dark-mode .table {
+  --bs-table-color: #e5e7eb;
+  --bs-table-bg: transparent;
+  --bs-table-hover-color: #fff;
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 992px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .filter-panel {
+    position: static;
+  }
+
+  .loading-overlay {
+    inset: 0;
+  }
+}

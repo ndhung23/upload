@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Upload History{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Upload History</h1>
+  <p>Audit log for ETD imports.</p>
+</div>
+<div class="table-panel">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="panel-title mb-0">Uploads</div>
+    <div id="historyMeta" class="small text-secondary"></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead><tr id="historyHead"></tr></thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+  <div class="d-flex justify-content-between align-items-center">
+    <button id="historyPrev" class="btn btn-sm btn-outline-secondary" type="button">Previous</button>
+    <span id="historyPageInfo" class="small text-secondary"></span>
+    <button id="historyNext" class="btn btn-sm btn-outline-secondary" type="button">Next</button>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload_history.js') }}"></script>
+{% endblock %}

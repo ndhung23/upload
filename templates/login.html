@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block public_content %}
+<div class="login-page">
+  <div class="login-panel">
+    <div class="brand justify-content-center mb-4">
+      <div class="brand-mark">BI</div>
+      <div>
+        <div class="brand-title">ETD Dashboard</div>
+        <div class="brand-subtitle">Secure sign in</div>
+      </div>
+    </div>
+    <form method="post" class="vstack gap-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label class="form-label">Username</label>
+        <input class="form-control" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div>
+        <label class="form-label">Password</label>
+        <input class="form-control" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary w-100" type="submit">Login</button>
+      <!-- <div class="small text-secondary text-center">Seed account: admin / admin123</div> -->
+    </form>
+  </div>
+</div>
+{% endblock %}
