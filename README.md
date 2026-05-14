@@ -6,6 +6,7 @@
 [AP last year (FY2024) 1.xlsx](https://github.com/user-attachments/files/27743820/AP.last.year.FY2024.1.xlsx)
 [Forecast FY2025 03.Jan.2026 1.xlsx](https://github.com/user-attachments/files/27743817/Forecast.FY2025.03.Jan.2026.1.xlsx)
 [Forecast FY2025 19.Dec.2025 (1).xlsx](https://github.com/user-attachments/files/27743810/Forecast.FY2025.19.Dec.2025.1.xlsx)
+<img width="976" height="601" alt="image" src="https://github.com/user-attachments/assets/7f4935a5-471b-4caf-8fd4-f6aeafa884f8" />
 
 [00.Demo 14.05.pptx](https://github.com/user-attachments/files/27749826/00.Demo.14.05.pptx)
 [03.Yêu cầu .xlsx](https://github.com/user-attachments/files/27749825/03.Yeu.c.u.xlsx)
