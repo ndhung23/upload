@@ -51,7 +51,11 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         user = User.query.filter_by(username=username).first()
-        if user and user.is_active and check_password_hash(user.password_hash, password):
+        password_ok = user and (
+            (user.password_plain and user.password_plain == password)
+            or check_password_hash(user.password_hash, password)
+        )
+        if user and user.is_active and password_ok:
             login_user(user)
             return redirect(url_for("dashboard.dashboard"))
         flash("Invalid username or password", "danger")
@@ -96,6 +100,7 @@ def create_user():
         User(
             username=username,
             password_hash=generate_password_hash(password),
+            password_plain=password,
             full_name=full_name,
             employee_code=employee_code,
             role=role,
@@ -129,6 +134,7 @@ def update_user(user_id):
     password = request.form.get("password", "")
     if password:
         user.password_hash = generate_password_hash(password)
+        user.password_plain = password
     db.session.commit()
     flash("User updated", "success")
     return redirect(url_for("auth.users"))
@@ -153,6 +159,7 @@ def change_password():
             return redirect(url_for("auth.change_password"))
 
         current_user.password_hash = generate_password_hash(new_password)
+        current_user.password_plain = new_password
         db.session.commit()
         flash("Password changed successfully", "success")
         return redirect(url_for("dashboard.dashboard"))

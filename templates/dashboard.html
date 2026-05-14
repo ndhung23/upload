@@ -9,6 +9,15 @@
     <div class="filter-panel">
       <div class="panel-title">Filters</div>
       <div class="vstack gap-3">
+        <select id="uploadFilter" class="form-select form-select-sm"><option value="">All uploaded files</option></select>
+        <select id="compareUploadFilter" class="form-select form-select-sm"><option value="">Compare with file</option></select>
+        <select id="chartTypeFilter" class="form-select form-select-sm">
+          <option value="bar">Bar chart</option>
+          <option value="line">Line chart</option>
+          <option value="pie">Pie chart by Type</option>
+          <option value="yamazumi">Yamazumi chart</option>
+        </select>
+        <select id="fyFilter" class="form-select form-select-sm"><option value="">All fiscal years</option></select>
         <select id="customerFilter" class="form-select form-select-sm"><option value="">All customers</option></select>
         <select id="typeFilter" class="form-select form-select-sm"><option value="">All types</option></select>
         <select id="countryFilter" class="form-select form-select-sm"><option value="">All countries</option></select>

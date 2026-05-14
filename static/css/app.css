@@ -168,6 +168,19 @@ body {
   font-family: Consolas, "Courier New", monospace;
 }
 
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.btn-icon .bi {
+  line-height: 1;
+}
+
 .page-head {
   margin-bottom: 18px;
 }

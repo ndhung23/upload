@@ -18,4 +18,8 @@
       window.dispatchEvent(new Event("resize"));
     });
   }
+
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (element) {
+    new bootstrap.Tooltip(element);
+  });
 })();

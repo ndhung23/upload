@@ -15,6 +15,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    password_plain = db.Column(db.String(255), nullable=False, default="")
     full_name = db.Column(db.String(160), nullable=False, default="")
     employee_code = db.Column(db.String(50), nullable=False, default="", index=True)
     role = db.Column(db.String(20), nullable=False, default="Staff")
@@ -84,7 +85,7 @@ class DimType2(db.Model):
 class FactETD(db.Model):
     __tablename__ = "FACT_ETD"
     __table_args__ = (
-        UniqueConstraint("PartNo", "Month", name="uq_fact_part_month"),
+        UniqueConstraint("PartNo", "Month", "UploadLogID", name="uq_fact_part_month_upload"),
     )
 
     ID = db.Column(db.Integer, primary_key=True)
@@ -103,6 +104,7 @@ class FactETD(db.Model):
     Type2ID = db.Column(db.Integer, db.ForeignKey("DIM_Type2.Type2ID"), nullable=False)
     Month = db.Column(db.String(20), nullable=False, index=True)
     Value = db.Column(db.Float, nullable=False, default=0)
+    UploadLogID = db.Column(db.Integer, db.ForeignKey("UPLOAD_LOGS.id"), nullable=True, index=True)
 
     customer = db.relationship("DimCustomer")
     type = db.relationship("DimType")
@@ -112,6 +114,7 @@ class FactETD(db.Model):
     country = db.relationship("DimCountry")
     market = db.relationship("DimMarket")
     type2 = db.relationship("DimType2")
+    upload_log = db.relationship("UploadLog")
 
 
 class UploadLog(db.Model):
@@ -119,6 +122,7 @@ class UploadLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), nullable=False, default="")
     uploaded_by = db.Column(db.String(80), nullable=False, index=True)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     total_rows = db.Column(db.Integer, nullable=False, default=0)
@@ -146,6 +150,7 @@ def ensure_schema():
                             id INTEGER NOT NULL PRIMARY KEY,
                             username VARCHAR(80) NOT NULL UNIQUE,
                             password_hash VARCHAR(255) NOT NULL,
+                            password_plain VARCHAR(255) DEFAULT '' NOT NULL,
                             full_name VARCHAR(160) DEFAULT '' NOT NULL,
                             employee_code VARCHAR(50) DEFAULT '' NOT NULL,
                             role VARCHAR(20) DEFAULT 'Staff' NOT NULL,
@@ -161,8 +166,8 @@ def ensure_schema():
                     text(
                         f"""
                         INSERT OR IGNORE INTO users_migrated
-                        (id, username, password_hash, full_name, employee_code, role, manager_id, created_at, is_active)
-                        SELECT id, username, password_hash, {full_name_expr}, '', role, NULL, {created_expr}, {active_expr}
+                        (id, username, password_hash, password_plain, full_name, employee_code, role, manager_id, created_at, is_active)
+                        SELECT id, username, password_hash, '', {full_name_expr}, '', role, NULL, {created_expr}, {active_expr}
                         FROM users
                         """
                     )
@@ -177,6 +182,8 @@ def ensure_schema():
         with db.engine.begin() as conn:
             if "full_name" not in user_columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN full_name VARCHAR(160) DEFAULT '' NOT NULL"))
+            if "password_plain" not in user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN password_plain VARCHAR(255) DEFAULT '' NOT NULL"))
             if "employee_code" not in user_columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN employee_code VARCHAR(50) DEFAULT '' NOT NULL"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_employee_code ON users (employee_code)"))
@@ -194,10 +201,71 @@ def ensure_schema():
     if "UPLOAD_LOGS" in inspector.get_table_names():
         log_columns = {column["name"] for column in inspector.get_columns("UPLOAD_LOGS")}
         with db.engine.begin() as conn:
+            if "stored_filename" not in log_columns:
+                conn.execute(text("ALTER TABLE UPLOAD_LOGS ADD COLUMN stored_filename VARCHAR(255) DEFAULT '' NOT NULL"))
             if "invalid_rows" not in log_columns:
                 conn.execute(text("ALTER TABLE UPLOAD_LOGS ADD COLUMN invalid_rows INTEGER DEFAULT 0 NOT NULL"))
             if "message" not in log_columns:
                 conn.execute(text("ALTER TABLE UPLOAD_LOGS ADD COLUMN message TEXT DEFAULT '' NOT NULL"))
+
+    if "FACT_ETD" in inspector.get_table_names():
+        fact_columns = {column["name"] for column in inspector.get_columns("FACT_ETD")}
+        fact_sql = db.session.execute(
+            text("SELECT sql FROM sqlite_master WHERE type='table' AND name='FACT_ETD'")
+        ).scalar() or ""
+        needs_upload_column = "UploadLogID" not in fact_columns
+        needs_unique_migration = "uq_fact_part_month_upload" not in fact_sql
+        if needs_upload_column or needs_unique_migration:
+            with db.engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE FACT_ETD_migrated (
+                            "ID" INTEGER NOT NULL PRIMARY KEY,
+                            "PartNo" VARCHAR(255) NOT NULL,
+                            "CustomerID" INTEGER NOT NULL,
+                            "TypeID" INTEGER NOT NULL,
+                            "LaserID" INTEGER NOT NULL,
+                            "CountryOfMakerID" INTEGER NOT NULL,
+                            "CarMakerID" INTEGER NOT NULL,
+                            "CountryID" INTEGER NOT NULL,
+                            "MarketID" INTEGER NOT NULL,
+                            "Type2ID" INTEGER NOT NULL,
+                            "Month" VARCHAR(20) NOT NULL,
+                            "Value" FLOAT NOT NULL,
+                            "UploadLogID" INTEGER,
+                            CONSTRAINT uq_fact_part_month_upload UNIQUE ("PartNo", "Month", "UploadLogID"),
+                            FOREIGN KEY("CustomerID") REFERENCES "DIM_Customer" ("CustomerID"),
+                            FOREIGN KEY("TypeID") REFERENCES "DIM_Type" ("TypeID"),
+                            FOREIGN KEY("LaserID") REFERENCES "DIM_Laser" ("LaserID"),
+                            FOREIGN KEY("CountryOfMakerID") REFERENCES "DIM_CountryOfMaker" ("CountryOfMakerID"),
+                            FOREIGN KEY("CarMakerID") REFERENCES "DIM_CarMaker" ("CarMakerID"),
+                            FOREIGN KEY("CountryID") REFERENCES "DIM_Country" ("CountryID"),
+                            FOREIGN KEY("MarketID") REFERENCES "DIM_Market" ("MarketID"),
+                            FOREIGN KEY("Type2ID") REFERENCES "DIM_Type2" ("Type2ID"),
+                            FOREIGN KEY("UploadLogID") REFERENCES "UPLOAD_LOGS" (id)
+                        )
+                        """
+                    )
+                )
+                upload_expr = '"UploadLogID"' if "UploadLogID" in fact_columns else "NULL"
+                conn.execute(
+                    text(
+                        f"""
+                        INSERT OR IGNORE INTO FACT_ETD_migrated
+                        ("ID", "PartNo", "CustomerID", "TypeID", "LaserID", "CountryOfMakerID",
+                         "CarMakerID", "CountryID", "MarketID", "Type2ID", "Month", "Value", "UploadLogID")
+                        SELECT "ID", "PartNo", "CustomerID", "TypeID", "LaserID", "CountryOfMakerID",
+                               "CarMakerID", "CountryID", "MarketID", "Type2ID", "Month", "Value", {upload_expr}
+                        FROM FACT_ETD
+                        """
+                    )
+                )
+                conn.execute(text("DROP TABLE FACT_ETD"))
+                conn.execute(text("ALTER TABLE FACT_ETD_migrated RENAME TO FACT_ETD"))
+                conn.execute(text('CREATE INDEX IF NOT EXISTS ix_FACT_ETD_PartNo ON FACT_ETD ("PartNo")'))
+                conn.execute(text('CREATE INDEX IF NOT EXISTS ix_FACT_ETD_Month ON FACT_ETD ("Month")'))
+                conn.execute(text('CREATE INDEX IF NOT EXISTS ix_FACT_ETD_UploadLogID ON FACT_ETD ("UploadLogID")'))
 
 
 def seed_admin():
@@ -217,11 +285,13 @@ def seed_admin():
             if username == "90122":
                 user.manager_id = manager_id
             user.is_active = True
+            user.password_plain = user.password_plain or password
             continue
         db.session.add(
             User(
                 username=username,
                 password_hash=generate_password_hash(password),
+                password_plain=password,
                 full_name=full_name,
                 employee_code=employee_code,
                 role=role,

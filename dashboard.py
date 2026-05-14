@@ -67,9 +67,38 @@ def _month_key(month):
         return 999999
 
 
-def _allowed_months(month_from=None, month_to=None):
-    months = [m[0] for m in db.session.query(FactETD.Month).distinct().all()]
+def _all_months(query=None):
+    source = query if query is not None else db.session.query(FactETD.Month)
+    months = [m[0] for m in source.distinct().all()]
+    return sorted(months, key=_month_key)
+
+
+def _fy_bounds(fiscal_year):
+    if not fiscal_year:
+        return None, None
+    value = str(fiscal_year).upper().replace("FY", "").strip()
+    if not value.isdigit():
+        return None, None
+    year = int(value) % 100
+    return f"{year:02d}-Apr", f"{(year + 1) % 100:02d}-May"
+
+
+def _fy_label_for_month(month):
+    try:
+        year_text, name = month.split("-")
+        year = int(year_text)
+        fiscal_year = year if MONTH_ORDER[name] >= 4 else year - 1
+        return f"FY{fiscal_year % 100:02d}"
+    except Exception:
+        return None
+
+
+def _allowed_months(month_from=None, month_to=None, fiscal_year=None, query=None):
+    months = _all_months(query)
     months = sorted(months, key=_month_key)
+    fy_from, fy_to = _fy_bounds(fiscal_year)
+    month_from = month_from or fy_from
+    month_to = month_to or fy_to
     if not month_from and not month_to:
         return months
 
@@ -81,15 +110,19 @@ def _allowed_months(month_from=None, month_to=None):
 def _base_query():
     return (
         db.session.query(FactETD)
+        .join(UploadLog, FactETD.UploadLogID == UploadLog.id)
         .join(DimCustomer, FactETD.CustomerID == DimCustomer.CustomerID)
         .join(DimType, FactETD.TypeID == DimType.TypeID)
         .join(DimCountry, FactETD.CountryID == DimCountry.CountryID)
         .join(DimCarMaker, FactETD.CarMakerID == DimCarMaker.CarMakerID)
         .join(DimMarket, FactETD.MarketID == DimMarket.MarketID)
+        .filter(UploadLog.status == "success")
     )
 
 
-def _apply_filters(query):
+def _apply_filters(query, upload_log_id=None, include_upload=True):
+    if upload_log_id is None and include_upload:
+        upload_log_id = request.args.get("upload_log_id", type=int)
     customer_id = request.args.get("customer_id")
     type_id = request.args.get("type_id")
     country_id = request.args.get("country_id")
@@ -97,7 +130,10 @@ def _apply_filters(query):
     market_id = request.args.get("market_id")
     month_from = request.args.get("month_from")
     month_to = request.args.get("month_to")
+    fiscal_year = request.args.get("fiscal_year")
 
+    if upload_log_id:
+        query = query.filter(FactETD.UploadLogID == upload_log_id)
     if customer_id:
         query = query.filter(FactETD.CustomerID == int(customer_id))
     if type_id:
@@ -109,8 +145,8 @@ def _apply_filters(query):
     if market_id:
         query = query.filter(FactETD.MarketID == int(market_id))
 
-    month_labels = _allowed_months(month_from, month_to)
-    if month_from or month_to:
+    month_labels = _allowed_months(month_from, month_to, fiscal_year)
+    if month_from or month_to or fiscal_year:
         query = query.filter(FactETD.Month.in_(month_labels or ["__none__"]))
 
     return query
@@ -130,9 +166,10 @@ def _serialize_model(row, columns):
     return {column: _serialize_value(getattr(row, column)) for column in columns}
 
 
-def _create_upload_log(filename, status, message="", result=None):
+def _create_upload_log(filename, stored_filename, status, message="", result=None):
     log = UploadLog(
         filename=filename,
+        stored_filename=stored_filename,
         uploaded_by=current_user.username,
         status=status,
         message=message or "",
@@ -145,6 +182,62 @@ def _create_upload_log(filename, status, message="", result=None):
     db.session.add(log)
     db.session.commit()
     return log
+
+
+def _update_upload_log(log, status, message="", result=None):
+    log.status = status
+    log.message = message or ""
+    if result:
+        log.total_rows = result.total_rows
+        log.inserted_rows = result.inserted
+        log.updated_rows = result.updated
+        log.skipped_rows = result.skipped
+        log.invalid_rows = result.invalid_rows
+    db.session.commit()
+    return log
+
+
+def _successful_upload_options():
+    return (
+        UploadLog.query.filter(UploadLog.status == "success")
+        .order_by(UploadLog.uploaded_at.desc(), UploadLog.id.desc())
+        .all()
+    )
+
+
+def _upload_label(log):
+    return f"#{log.id} - {log.filename}"
+
+
+def _stored_upload_path(log):
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    if log.stored_filename:
+        path = os.path.abspath(os.path.join(upload_folder, log.stored_filename))
+        upload_root = os.path.abspath(upload_folder)
+        if path.startswith(upload_root) and os.path.exists(path):
+            return path
+        return None
+
+    candidates = (
+        name for name in os.listdir(upload_folder)
+        if name.endswith(log.filename)
+    )
+    for name in candidates:
+        path = os.path.abspath(os.path.join(upload_folder, name))
+        upload_root = os.path.abspath(upload_folder)
+        if path.startswith(upload_root) and os.path.exists(path):
+            return path
+    return None
+
+
+def _delete_stored_upload_file(log):
+    path = _stored_upload_path(log)
+    if not path:
+        log.stored_filename = "__deleted__"
+        return False
+    os.remove(path)
+    log.stored_filename = "__deleted__"
+    return True
 
 
 def _validate_select_sql(sql):
@@ -188,8 +281,12 @@ def data_explorer():
 @dashboard_bp.route("/api/filter")
 @login_required
 def api_filter():
+    months = _allowed_months()
+    fiscal_years = sorted({label for label in (_fy_label_for_month(month) for month in months) if label}, reverse=True)
     return jsonify(
         {
+            "uploads": [{"id": row.id, "text": _upload_label(row)} for row in _successful_upload_options()],
+            "fiscal_years": fiscal_years,
             "customers": [
                 {"id": row.CustomerID, "text": row.Customer}
                 for row in DimCustomer.query.order_by(DimCustomer.Customer).all()
@@ -210,7 +307,7 @@ def api_filter():
                 {"id": row.MarketID, "text": row.Market}
                 for row in DimMarket.query.order_by(DimMarket.Market).all()
             ],
-            "months": _allowed_months(),
+            "months": months,
         }
     )
 
@@ -220,6 +317,8 @@ def api_filter():
 def api_dashboard():
     page = max(request.args.get("page", 1, type=int), 1)
     per_page = min(max(request.args.get("per_page", 25, type=int), 5), 100)
+    chart_type = request.args.get("chart_type", "bar")
+    compare_upload_id = request.args.get("compare_upload_id", type=int)
 
     filtered = _apply_filters(_base_query())
 
@@ -228,12 +327,41 @@ def api_dashboard():
     total_customer = filtered.with_entities(func.count(func.distinct(FactETD.CustomerID))).scalar() or 0
     total_market = filtered.with_entities(func.count(func.distinct(FactETD.MarketID))).scalar() or 0
 
-    chart_rows = (
+    monthly_rows = (
         filtered.with_entities(FactETD.Month, func.sum(FactETD.Value).label("total"))
         .group_by(FactETD.Month)
         .all()
     )
-    chart_rows = sorted(chart_rows, key=lambda item: _month_key(item.Month))
+    monthly_rows = sorted(monthly_rows, key=lambda item: _month_key(item.Month))
+
+    type_rows = (
+        filtered.with_entities(DimType.Type, func.sum(FactETD.Value).label("total"))
+        .group_by(DimType.Type)
+        .order_by(func.sum(FactETD.Value).desc())
+        .all()
+    )
+    stacked_rows = (
+        filtered.with_entities(FactETD.Month, DimType.Type, func.sum(FactETD.Value).label("total"))
+        .group_by(FactETD.Month, DimType.Type)
+        .all()
+    )
+    stacked_months = sorted({row.Month for row in stacked_rows}, key=_month_key)
+    stacked_types = [row.Type for row in type_rows[:8]]
+    stacked_lookup = {(row.Month, row.Type): float(row.total or 0) for row in stacked_rows}
+
+    compare_chart = None
+    if compare_upload_id:
+        compare_query = _apply_filters(_base_query(), upload_log_id=compare_upload_id)
+        compare_rows = (
+            compare_query.with_entities(FactETD.Month, func.sum(FactETD.Value).label("total"))
+            .group_by(FactETD.Month)
+            .all()
+        )
+        compare_rows = sorted(compare_rows, key=lambda item: _month_key(item.Month))
+        compare_chart = {
+            "months": [row.Month for row in compare_rows],
+            "values": [float(row.total or 0) for row in compare_rows],
+        }
 
     top_customer = (
         filtered.with_entities(DimCustomer.Customer, func.sum(FactETD.Value).label("total"))
@@ -275,8 +403,20 @@ def api_dashboard():
                 "top_market": top_market.Market if top_market else "-",
             },
             "chart": {
-                "months": [row.Month for row in chart_rows],
-                "values": [float(row.total or 0) for row in chart_rows],
+                "type": chart_type,
+                "months": [row.Month for row in monthly_rows],
+                "values": [float(row.total or 0) for row in monthly_rows],
+                "pie_labels": [row.Type or "(blank)" for row in type_rows],
+                "pie_values": [float(row.total or 0) for row in type_rows],
+                "stacked_months": stacked_months,
+                "stacked_series": [
+                    {
+                        "name": item,
+                        "values": [stacked_lookup.get((month, item), 0) for month in stacked_months],
+                    }
+                    for item in stacked_types
+                ],
+                "compare": compare_chart,
             },
             "table": {
                 "rows": rows,
@@ -303,18 +443,19 @@ def api_upload():
     stamped = datetime.now().strftime("%Y%m%d_%H%M%S_") + filename
     file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], stamped)
     file.save(file_path)
+    log = _create_upload_log(filename, stamped, "processing", "Upload saved, import is running")
 
     try:
-        result = process_excel(file_path)
+        result = process_excel(file_path, upload_log_id=log.id)
     except ETLError as exc:
-        _create_upload_log(filename, "fail", str(exc))
+        _update_upload_log(log, "fail", str(exc))
         return jsonify({"ok": False, "message": str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
-        _create_upload_log(filename, "fail", str(exc))
+        _update_upload_log(log, "fail", str(exc))
         return jsonify({"ok": False, "message": "Unexpected import error: " + str(exc)}), 500
 
-    _create_upload_log(filename, "success", "Upload completed", result)
+    _update_upload_log(log, "success", "Upload completed", result)
     return jsonify(
         {
             "ok": True,
@@ -357,15 +498,85 @@ def api_upload_logs():
     query = UploadLog.query.order_by(UploadLog.uploaded_at.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     columns = _model_columns(UploadLog)
+    rows = []
+    for row in pagination.items:
+        payload = _serialize_model(row, columns)
+        payload["download_url"] = url_for("dashboard.download_upload", log_id=row.id) if _stored_upload_path(row) else ""
+        rows.append(payload)
     return jsonify(
         {
             "columns": columns,
-            "rows": [_serialize_model(row, columns) for row in pagination.items],
+            "rows": rows,
             "page": pagination.page,
             "pages": pagination.pages,
             "total": pagination.total,
         }
     )
+
+
+@dashboard_bp.route("/upload-history/<int:log_id>/download")
+@role_required("Admin", "Manager")
+def download_upload(log_id):
+    log = db.session.get(UploadLog, log_id)
+    if not log:
+        flash("Uploaded file was not found in history", "warning")
+        return redirect(url_for("dashboard.upload_history"))
+    path = _stored_upload_path(log)
+    if not path:
+        flash("Stored Excel file is missing from uploads folder", "warning")
+        return redirect(url_for("dashboard.upload_history"))
+    return send_file(
+        path,
+        as_attachment=True,
+        download_name=log.filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@dashboard_bp.route("/api/upload-logs/<int:log_id>", methods=["POST"])
+@role_required("Admin", "Manager")
+def update_upload_log(log_id):
+    log = db.session.get(UploadLog, log_id)
+    if not log:
+        return jsonify({"ok": False, "message": "Upload log was not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    filename = (payload.get("filename") or "").strip()
+    if not filename:
+        return jsonify({"ok": False, "message": "Filename is required"}), 400
+    if not secure_filename(filename).lower().endswith((".xlsx", ".xlsm", ".xls")):
+        return jsonify({"ok": False, "message": "Filename must be an Excel file name"}), 400
+
+    log.filename = filename
+    db.session.commit()
+    return jsonify({"ok": True, "message": "Upload history updated"})
+
+
+@dashboard_bp.route("/api/upload-logs/<int:log_id>/file", methods=["DELETE"])
+@role_required("Admin", "Manager")
+def delete_upload_file(log_id):
+    log = db.session.get(UploadLog, log_id)
+    if not log:
+        return jsonify({"ok": False, "message": "Upload log was not found"}), 404
+
+    removed = _delete_stored_upload_file(log)
+    db.session.commit()
+    message = "Excel file deleted from server" if removed else "Excel file was already missing"
+    return jsonify({"ok": True, "message": message})
+
+
+@dashboard_bp.route("/api/upload-logs/<int:log_id>", methods=["DELETE"])
+@role_required("Admin", "Manager")
+def delete_upload_log(log_id):
+    log = db.session.get(UploadLog, log_id)
+    if not log:
+        return jsonify({"ok": False, "message": "Upload log was not found"}), 404
+
+    _delete_stored_upload_file(log)
+    deleted_facts = FactETD.query.filter(FactETD.UploadLogID == log.id).delete(synchronize_session=False)
+    db.session.delete(log)
+    db.session.commit()
+    return jsonify({"ok": True, "message": f"Deleted upload history and {deleted_facts} imported rows"})
 
 
 @dashboard_bp.route("/api/admin/tables")

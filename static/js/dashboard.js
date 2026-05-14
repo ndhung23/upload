@@ -24,6 +24,10 @@ function selectOptions(select, items, placeholder) {
 
 function filters() {
   return {
+    upload_log_id: document.getElementById("uploadFilter").value,
+    compare_upload_id: document.getElementById("compareUploadFilter").value,
+    chart_type: document.getElementById("chartTypeFilter").value,
+    fiscal_year: document.getElementById("fyFilter").value,
     customer_id: document.getElementById("customerFilter").value,
     type_id: document.getElementById("typeFilter").value,
     country_id: document.getElementById("countryFilter").value,
@@ -57,6 +61,9 @@ async function loadFilters() {
     headers: { "X-CSRFToken": csrfToken() },
   });
   const data = await response.json();
+  selectOptions(document.getElementById("uploadFilter"), data.uploads, "All uploaded files");
+  selectOptions(document.getElementById("compareUploadFilter"), data.uploads, "Compare with file");
+  selectOptions(document.getElementById("fyFilter"), data.fiscal_years, "All fiscal years");
   selectOptions(document.getElementById("customerFilter"), data.customers, "All customers");
   selectOptions(document.getElementById("typeFilter"), data.types, "All types");
   selectOptions(document.getElementById("countryFilter"), data.countries, "All countries");
@@ -68,26 +75,76 @@ async function loadFilters() {
 
 function renderChart(chart) {
   const isDark = document.body.classList.contains("dark-mode");
+  const traces = [];
+  const layout = {
+    margin: { t: 20, r: 20, l: 70, b: 60 },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: isDark ? "#e5e7eb" : "#0f172a" },
+    xaxis: { gridcolor: isDark ? "#334155" : "#e2e8f0" },
+    yaxis: { gridcolor: isDark ? "#334155" : "#e2e8f0", tickformat: "," },
+    responsive: true,
+  };
+
+  if (chart.type === "pie") {
+    traces.push({
+      labels: chart.pie_labels,
+      values: chart.pie_values,
+      type: "pie",
+      hole: 0.35,
+      hovertemplate: "%{label}<br>%{value:,.0f}<extra></extra>",
+    });
+    layout.margin = { t: 20, r: 20, l: 20, b: 20 };
+  } else if (chart.type === "line") {
+    traces.push({
+      x: chart.months,
+      y: chart.values,
+      type: "scatter",
+      mode: "lines+markers",
+      name: "Selected file",
+      line: { color: "#2563eb", width: 3 },
+      hovertemplate: "%{x}<br>%{y:,.0f}<extra></extra>",
+    });
+  } else if (chart.type === "yamazumi") {
+    chart.stacked_series.forEach((series) => {
+      traces.push({
+        x: chart.stacked_months,
+        y: series.values,
+        type: "bar",
+        name: series.name,
+        hovertemplate: "%{x}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
+      });
+    });
+    layout.barmode = "stack";
+  } else {
+    traces.push({
+      x: chart.months,
+      y: chart.values,
+      type: "bar",
+      name: "Selected file",
+      marker: { color: "#2563eb" },
+      hovertemplate: "%{x}<br>%{y:,.0f}<extra></extra>",
+    });
+  }
+
+  if (chart.compare && chart.type !== "pie" && chart.type !== "yamazumi") {
+    traces.push({
+      x: chart.compare.months,
+      y: chart.compare.values,
+      type: chart.type === "line" ? "scatter" : "bar",
+      mode: chart.type === "line" ? "lines+markers" : undefined,
+      name: "Compare file",
+      marker: { color: "#f59e0b" },
+      line: { color: "#f59e0b", width: 3 },
+      hovertemplate: "%{x}<br>%{y:,.0f}<extra></extra>",
+    });
+    if (chart.type === "bar") layout.barmode = "group";
+  }
+
   Plotly.newPlot(
     "barChart",
-    [
-      {
-        x: chart.months,
-        y: chart.values,
-        type: "bar",
-        marker: { color: "#2563eb" },
-        hovertemplate: "%{x}<br>%{y:,.0f}<extra></extra>",
-      },
-    ],
-    {
-      margin: { t: 20, r: 20, l: 70, b: 60 },
-      paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "rgba(0,0,0,0)",
-      font: { color: isDark ? "#e5e7eb" : "#0f172a" },
-      xaxis: { gridcolor: isDark ? "#334155" : "#e2e8f0" },
-      yaxis: { gridcolor: isDark ? "#334155" : "#e2e8f0", tickformat: "," },
-      responsive: true,
-    },
+    traces,
+    layout,
     { displayModeBar: false, responsive: true },
   );
 }
@@ -146,6 +203,10 @@ async function loadDashboard() {
 function bindEvents() {
   [
     "customerFilter",
+    "uploadFilter",
+    "compareUploadFilter",
+    "chartTypeFilter",
+    "fyFilter",
     "typeFilter",
     "countryFilter",
     "carMakerFilter",

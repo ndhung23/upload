@@ -20,6 +20,21 @@ from models import (
 
 
 MONTH_REGEX = re.compile(r"^\d{2}-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$")
+MONTH_NAME_REGEX = re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$")
+MONTH_ORDER = {
+    "Jan": 1,
+    "Feb": 2,
+    "Mar": 3,
+    "Apr": 4,
+    "May": 5,
+    "Jun": 6,
+    "Jul": 7,
+    "Aug": 8,
+    "Sep": 9,
+    "Oct": 10,
+    "Nov": 11,
+    "Dec": 12,
+}
 
 DIM_MAP = {
     "Customer": (DimCustomer, "CustomerID", "Customer"),
@@ -40,7 +55,6 @@ REQUIRED_COLUMNS = [
     "Country of maker",
     "Car maker",
     "Market",
-    "Type2",
 ]
 
 COLUMN_ALIASES = {
@@ -85,6 +99,11 @@ def _canonical_column_name(value):
     text = str(value).strip()
     if MONTH_REGEX.match(text):
         return text
+    if MONTH_NAME_REGEX.match(text):
+        return text
+    parsed_date = pd.to_datetime(value, errors="coerce")
+    if not pd.isna(parsed_date) and getattr(parsed_date, "year", 1900) >= 2000:
+        return f"{parsed_date.year % 100:02d}-{parsed_date.strftime('%b')}"
     return COLUMN_ALIASES.get(_normalize_header(value), text)
 
 
@@ -172,19 +191,57 @@ def _make_unique_columns(columns):
     return result
 
 
-def _extract_main_table(raw_df):
+def _infer_fiscal_year(raw_df, file_path):
+    text_parts = [os.path.basename(file_path)]
+    for _, row in raw_df.head(5).iterrows():
+        text_parts.extend(_row_values(row))
+    text = " ".join(text_parts)
+    match = re.search(r"FY\s*20?(\d{2})", text, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _month_with_fiscal_year(month_name, fiscal_year):
+    if not fiscal_year:
+        return month_name
+    year = fiscal_year if MONTH_ORDER[month_name] >= 4 else fiscal_year + 1
+    return f"{year % 100:02d}-{month_name}"
+
+
+def _prepare_flexible_columns(df, fiscal_year):
+    rename = {}
+    for column in df.columns:
+        base = str(column).split("__", 1)[0]
+        if MONTH_NAME_REGEX.match(base):
+            rename[column] = _month_with_fiscal_year(base, fiscal_year)
+    if rename:
+        df = df.rename(columns=rename)
+        df.columns = _make_unique_columns(df.columns)
+
+    if "Type__1" in df.columns:
+        df["Type2"] = df["Type"]
+        df["Type"] = df["Type__1"]
+    elif "Type2" not in df.columns and "Type" in df.columns:
+        df["Type2"] = df["Type"]
+
+    if "Country" not in df.columns:
+        df["Country"] = df["Market"] if "Market" in df.columns else ""
+
+    return df
+
+
+def _extract_main_table(raw_df, file_path):
     header_idx = _detect_header_row(raw_df)
     header = _make_unique_columns(raw_df.iloc[header_idx].tolist())
     df = raw_df.iloc[header_idx + 1 :].copy()
     df.columns = header
     df = df.dropna(how="all")
+    df = _prepare_flexible_columns(df, _infer_fiscal_year(raw_df, file_path))
 
     missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing:
         raise ETLError("Missing required columns after header detection: " + ", ".join(missing))
-
-    if "Country" not in df.columns:
-        df["Country"] = ""
 
     month_columns = [col for col in df.columns if MONTH_REGEX.match(str(col).strip())]
     if not month_columns:
@@ -259,19 +316,21 @@ def _get_or_create_dim(model, key_col, value_col, value, cache):
     return dim_id, True
 
 
-def process_excel(file_path):
+def process_excel(file_path, upload_log_id=None):
     if not os.path.exists(file_path):
         raise ETLError("Uploaded file was not found")
 
     try:
-        raw_df = pd.read_excel(file_path, dtype=object, header=None)
+        xl = pd.ExcelFile(file_path)
+        sheet_name = "ETD detail" if "ETD detail" in xl.sheet_names else xl.sheet_names[0]
+        raw_df = pd.read_excel(file_path, sheet_name=sheet_name, dtype=object, header=None)
     except Exception as exc:
         raise ETLError(f"Cannot read Excel file: {exc}") from exc
 
     if raw_df.empty:
         raise ETLError("Excel file has no data")
 
-    df, month_columns, header_row, invalid_rows = _extract_main_table(raw_df)
+    df, month_columns, header_row, invalid_rows = _extract_main_table(raw_df, file_path)
 
     id_columns = list(DIM_MAP.keys()) + ["Part No."]
     long_df = pd.melt(
@@ -320,6 +379,7 @@ def process_excel(file_path):
             existing = FactETD.query.filter_by(
                 PartNo=row["Part No."],
                 Month=row["Month"],
+                UploadLogID=upload_log_id,
             ).first()
 
             payload = {
@@ -334,6 +394,7 @@ def process_excel(file_path):
                 "Type2ID": dim_ids["Type2ID"],
                 "Month": row["Month"],
                 "Value": float(row["Value"]),
+                "UploadLogID": upload_log_id,
             }
 
             if existing:

@@ -1,83 +1,122 @@
 {% extends "base.html" %}
 {% block title %}Users{% endblock %}
 {% block content %}
-<div class="page-head">
-  <h1>User Management</h1>
-  <p>Create and manage Admin, Manager and Staff accounts.</p>
-</div>
-<div class="row g-3">
-  <div class="col-lg-4">
-    <div class="form-panel">
-      <div class="panel-title">Create User</div>
-      <form method="post" action="{{ url_for('auth.create_user') }}" class="vstack gap-3">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
-        <input class="form-control" name="username" placeholder="Username" required>
-        <input class="form-control" name="full_name" placeholder="Full name">
-        <input class="form-control" name="employee_code" placeholder="Employee code">
-        <input class="form-control" type="password" name="password" placeholder="Password" required>
-        <select class="form-select" name="role">
-          {% for role in roles %}
-          <option value="{{ role }}">{{ role }}</option>
-          {% endfor %}
-        </select>
-        <select class="form-select" name="manager_id">
-          <option value="">No manager</option>
-          {% for manager in managers %}
-          <option value="{{ manager.id }}">#{{ manager.id }} - {{ manager.username }} / {{ manager.full_name }}</option>
-          {% endfor %}
-        </select>
-        <button class="btn btn-primary" type="submit">Create</button>
-      </form>
-    </div>
+<div class="page-head d-flex justify-content-between align-items-start gap-3">
+  <div>
+    <h1>User Management</h1>
+    <p>Create and manage Admin, Manager and Staff accounts.</p>
   </div>
-  <div class="col-lg-8">
-    <div class="table-panel">
-      <div class="panel-title">Accounts</div>
-      <div class="table-responsive">
-        <table class="table table-sm align-middle">
-          <thead><tr><th>Username</th><th>Code</th><th>Full Name</th><th>Role</th><th>Manager</th><th>Status</th><th>New Password</th><th></th></tr></thead>
-          <tbody>
-          {% for user in users %}
-            <tr>
-              <form method="post" action="{{ url_for('auth.update_user', user_id=user.id) }}">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
-                <td>{{ user.username }}</td>
-                <td><input class="form-control form-control-sm" name="employee_code" value="{{ user.employee_code }}"></td>
-                <td><input class="form-control form-control-sm" name="full_name" value="{{ user.full_name }}"></td>
-                <td>
-                  <select class="form-select form-select-sm" name="role">
-                    {% for role in roles %}
-                    <option value="{{ role }}" {% if role == user.role %}selected{% endif %}>{{ role }}</option>
-                    {% endfor %}
-                  </select>
-                </td>
-                <td>
-                  <select class="form-select form-select-sm" name="manager_id">
-                    <option value="">No manager</option>
-                    {% for manager in managers %}
-                      {% if manager.id != user.id %}
-                      <option value="{{ manager.id }}" {% if user.manager_id == manager.id %}selected{% endif %}>
-                        #{{ manager.id }} - {{ manager.username }}
-                      </option>
-                      {% endif %}
-                    {% endfor %}
-                  </select>
-                </td>
-                <td><input class="form-check-input" type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}></td>
-                <td><input class="form-control form-control-sm" type="password" name="password" placeholder="Leave unchanged"></td>
-                <td class="text-end">
-                  <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
-              </form>
-                  <form method="post" action="{{ url_for('auth.delete_user', user_id=user.id) }}" class="d-inline">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
-                    <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
-                  </form>
-                </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
+  <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createUserModal" title="Add account">
+    <i class="bi bi-plus-lg me-1"></i>Add Account
+  </button>
+</div>
+
+<div class="table-panel">
+  <div class="panel-title">Accounts</div>
+  {% for user in users %}
+  <form id="update-user-{{ user.id }}" method="post" action="{{ url_for('auth.update_user', user_id=user.id) }}"></form>
+  {% endfor %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered table-sm align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Code</th>
+          <th>Full Name</th>
+          <th>Role</th>
+          <th>Manager</th>
+          <th>Status</th>
+          <th>New Password</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for user in users %}
+        <tr>
+          <td>{{ user.id }}</td>
+          <td>{{ user.username }}</td>
+          <td>
+            <input form="update-user-{{ user.id }}" class="form-control form-control-sm" name="employee_code" value="{{ user.employee_code }}">
+          </td>
+          <td>
+            <input form="update-user-{{ user.id }}" class="form-control form-control-sm" name="full_name" value="{{ user.full_name }}">
+          </td>
+          <td>
+            <select form="update-user-{{ user.id }}" class="form-select form-select-sm" name="role">
+              {% for role in roles %}
+              <option value="{{ role }}" {% if role == user.role %}selected{% endif %}>{{ role }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select form="update-user-{{ user.id }}" class="form-select form-select-sm" name="manager_id">
+              <option value="">No manager</option>
+              {% for manager in managers %}
+                {% if manager.id != user.id %}
+                <option value="{{ manager.id }}" {% if user.manager_id == manager.id %}selected{% endif %}>
+                  #{{ manager.id }} - {{ manager.username }}
+                </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </td>
+          <td class="text-center">
+            <input form="update-user-{{ user.id }}" class="form-check-input" type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %}>
+          </td>
+          <td>
+            <input form="update-user-{{ user.id }}" class="form-control form-control-sm" type="password" name="password" placeholder="Leave unchanged">
+            <input form="update-user-{{ user.id }}" type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+          </td>
+          <td class="text-end text-nowrap">
+            <button form="update-user-{{ user.id }}" class="btn btn-sm btn-outline-primary btn-icon" type="submit" title="Save" aria-label="Save" data-bs-toggle="tooltip">
+              <i class="bi bi-floppy"></i>
+            </button>
+            <form method="post" action="{{ url_for('auth.delete_user', user_id=user.id) }}" class="d-inline">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+              <button class="btn btn-sm btn-outline-danger btn-icon" type="submit" title="Delete" aria-label="Delete" data-bs-toggle="tooltip">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal fade" id="createUserModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('auth.create_user') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Account</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body vstack gap-3">
+          <input class="form-control" name="username" placeholder="Username" required>
+          <input class="form-control" name="full_name" placeholder="Full name">
+          <input class="form-control" name="employee_code" placeholder="Employee code">
+          <input class="form-control" type="password" name="password" placeholder="Password" required>
+          <select class="form-select" name="role">
+            {% for role in roles %}
+            <option value="{{ role }}">{{ role }}</option>
+            {% endfor %}
+          </select>
+          <select class="form-select" name="manager_id">
+            <option value="">No manager</option>
+            {% for manager in managers %}
+            <option value="{{ manager.id }}">#{{ manager.id }} - {{ manager.username }} / {{ manager.full_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1"></i>Create</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
