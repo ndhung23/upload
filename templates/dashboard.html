@@ -1,63 +1,204 @@
-{% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
-{% block head %}
+{% extends "base.html" %} {% block title %}Dashboard{% endblock %} {% block head
+%}
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-{% endblock %}
-{% block content %}
+{% endblock %} {% block content %}
 <div class="row g-3">
-  <div class="col-lg-2">
-    <div class="filter-panel">
-      <div class="panel-title">Filters</div>
-      <div class="vstack gap-3">
-        <select id="uploadFilter" class="form-select form-select-sm"><option value="">All uploaded files</option></select>
-        <select id="compareUploadFilter" class="form-select form-select-sm"><option value="">Compare with file</option></select>
-        <select id="chartTypeFilter" class="form-select form-select-sm">
-          <option value="bar">Bar chart</option>
-          <option value="line">Line chart</option>
-          <option value="pie">Pie chart by Type</option>
-          <option value="yamazumi">Yamazumi chart</option>
+  <div class="col-xl-2 col-lg-3 dashboard-filter-col">
+    <div class="filter-panel dashboard-filter-panel">
+      <div class="panel-title">Year</div>
+      <div class="vstack gap-2">
+        <select id="fyFilter" class="form-select form-select-sm">
+          <option value="">All fiscal years</option>
         </select>
-        <select id="fyFilter" class="form-select form-select-sm"><option value="">All fiscal years</option></select>
-        <select id="customerFilter" class="form-select form-select-sm"><option value="">All customers</option></select>
-        <select id="typeFilter" class="form-select form-select-sm"><option value="">All types</option></select>
-        <select id="countryFilter" class="form-select form-select-sm"><option value="">All countries</option></select>
-        <select id="carMakerFilter" class="form-select form-select-sm"><option value="">All car makers</option></select>
-        <select id="marketFilter" class="form-select form-select-sm"><option value="">All markets</option></select>
         <div>
-          <label class="form-label small">Month from</label>
-          <select id="monthFromFilter" class="form-select form-select-sm"><option value="">Start</option></select>
+          <!-- <label class="form-label small">Month from</label> -->
+          <select id="monthFromFilter" class="form-select form-select-sm">
+            <option value="">Start</option>
+          </select>
         </div>
         <div>
-          <label class="form-label small">Month to</label>
-          <select id="monthToFilter" class="form-select form-select-sm"><option value="">End</option></select>
+          <!-- <label class="form-label small">Month to</label> -->
+          <select id="monthToFilter" class="form-select form-select-sm">
+            <option value="">End</option>
+          </select>
         </div>
-        <button id="resetFilters" class="btn btn-sm btn-outline-secondary" type="button">Reset</button>
+        <div class="panel-title">Compare</div>
+        <select id="uploadFilter" class="form-select form-select-sm">
+          <option value="">All uploaded files</option>
+        </select>
+        <select id="compareUploadFilter" class="form-select form-select-sm">
+          <option value="">Compare with file</option>
+        </select>
+
+
+        <select id="chartGroupFilter" class="form-select form-select-sm">
+          <option value="">Group by default</option>
+          <option value="customer">Group by Customer</option>
+          <option value="type2">Group by Type2</option>
+          <option value="type">Group by Type</option>
+          <option value="file">Group by File type</option>
+          <option value="market">Group by Market</option>
+          <option value="country">Group by Country</option>
+          <option value="car_maker">Group by Car maker</option>
+        </select>
+        <div class="panel-title">Filter</div>
+
+        <select id="customerFilter" class="form-select form-select-sm">
+          <option value="">All customers</option>
+        </select>
+        <select id="typeFilter" class="form-select form-select-sm">
+          <option value="">All types</option>
+        </select>
+        <select id="type2Filter" class="form-select form-select-sm">
+          <option value="">All type2</option>
+        </select>
+
+        <select id="countryFilter" class="form-select form-select-sm">
+          <option value="">All countries</option>
+        </select>
+        <select id="carMakerFilter" class="form-select form-select-sm">
+          <option value="">All car makers</option>
+        </select>
+        <select id="marketFilter" class="form-select form-select-sm">
+          <option value="">All markets</option>
+        </select>
+
+        <button
+          id="resetFilters"
+          class="btn btn-sm btn-outline-secondary"
+          type="button"
+        >
+          Reset
+        </button>
         {% if current_user.role in ['Admin', 'Manager'] %}
-        <a class="btn btn-sm btn-primary" href="{{ url_for('dashboard.upload_page') }}">Upload file</a>
+        <a
+          class="btn btn-sm btn-primary"
+          href="{{ url_for('dashboard.upload_page') }}"
+          >Upload file</a
+        >
         {% endif %}
       </div>
     </div>
   </div>
-  <div class="col-lg-10">
+  <div class="col-xl-10 col-lg-9">
     <div id="dashboardAlert"></div>
     <div id="dashboardLoading" class="loading-overlay d-none">
       <div class="spinner-border text-primary" role="status"></div>
     </div>
     <div class="row g-3 mb-3">
-      <div class="col-md-3"><div class="kpi-card"><span>Total Value</span><strong id="totalValue">0</strong></div></div>
-      <div class="col-md-3"><div class="kpi-card"><span>Total PartNo</span><strong id="totalPartNo">0</strong></div></div>
-      <div class="col-md-3"><div class="kpi-card"><span>Total Customer</span><strong id="totalCustomer">0</strong></div></div>
-      <div class="col-md-3"><div class="kpi-card"><span>Total Market</span><strong id="totalMarket">0</strong></div></div>
+      <div class="col-md-3">
+        <div class="kpi-card">
+          <span>Total Value</span><strong id="totalValue">0</strong>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="kpi-card">
+          <span>Total PartNo</span><strong id="totalPartNo">0</strong>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="kpi-card">
+          <span>Total Customer</span><strong id="totalCustomer">0</strong>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="kpi-card">
+          <span>Total Market</span><strong id="totalMarket">0</strong>
+        </div>
+      </div>
     </div>
     <div class="row g-3 mb-3">
-      <div class="col-md-6"><div class="info-card"><span>Top Customer</span><strong id="topCustomer">-</strong></div></div>
-      <div class="col-md-6"><div class="info-card"><span>Top Market</span><strong id="topMarket">-</strong></div></div>
+      <div class="col-md-6">
+        <div class="info-card">
+          <span>Top Customer</span><strong id="topCustomer">-</strong>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="info-card">
+          <span>Top Market</span><strong id="topMarket">-</strong>
+        </div>
+      </div>
+    </div>
+    <div class="mb-3" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;">
+      <div>
+        <label class="form-label small d-block">AP</label>
+        <select id="filterAP" class="form-select form-select-sm" data-category="AP"></select>
+      </div>
+      <div>
+        <label class="form-label small d-block">FC1</label>
+        <select id="filterFC1" class="form-select form-select-sm" data-category="FC1"></select>
+      </div>
+      <div>
+        <label class="form-label small d-block">FC2</label>
+        <select id="filterFC2" class="form-select form-select-sm" data-category="FC2"></select>
+      </div>
+      <div>
+        <label class="form-label small d-block">AP Last Year</label>
+        <select id="filterAPLastYear" class="form-select form-select-sm" data-category="AP_LAST_YEAR"></select>
+      </div>
+      <div>
+        <label class="form-label small d-block">Actual Last Year</label>
+        <select id="filterActualLastYear" class="form-select form-select-sm" data-category="ACTUAL_LAST_YEAR"></select>
+      </div>
     </div>
     <div class="chart-panel mb-3">
-      <div class="panel-title">Monthly ETD Value</div>
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="panel-title mb-0">Monthly ETD Value</div>
+        <div class="btn-group btn-group-sm">
+          <button
+            class="btn btn-outline-secondary chart-mode"
+            data-chart="bar"
+            type="button"
+          >
+            <i class="bi bi-bar-chart"></i>
+          </button>
+          <button
+            class="btn btn-outline-secondary chart-mode"
+            data-chart="line"
+            type="button"
+          >
+            <i class="bi bi-graph-up"></i>
+          </button>
+          <button
+            class="btn btn-outline-secondary chart-mode"
+            data-chart="area"
+            type="button"
+          >
+            <i class="bi bi-activity"></i>
+          </button>
+          <button
+            class="btn btn-outline-secondary chart-mode"
+            data-chart="hbar"
+            type="button"
+          >
+            <i class="bi bi-bar-chart-line"></i>
+          </button>
+          <button
+            class="btn btn-outline-secondary chart-mode"
+            data-chart="pie"
+            type="button"
+          >
+            <i class="bi bi-pie-chart"></i>
+          </button>
+          <button
+            class="btn btn-outline-secondary chart-mode"
+            data-chart="donut"
+            type="button"
+          >
+            <i class="bi bi-record-circle"></i>
+          </button>
+          <button
+            class="btn btn-outline-secondary chart-mode"
+            data-chart="yamazumi"
+            type="button"
+          >
+            <i class="bi bi-bar-chart-steps"></i>
+          </button>
+        </div>
+      </div>
       <div id="barChart" class="chart-box"></div>
     </div>
-    <div class="table-panel">
+    <div class="table-panel d-none" id="factPreviewPanel">
       <div class="d-flex align-items-center justify-content-between mb-2">
         <div class="panel-title mb-0">Fact Preview</div>
         <div class="small text-secondary" id="tableMeta">0 rows</div>
@@ -69,9 +210,11 @@
               <th>PartNo</th>
               <th>Customer</th>
               <th>Type</th>
+              <th>Type2</th>
               <th>Country</th>
               <th>CarMaker</th>
               <th>Market</th>
+              <th>File</th>
               <th>Month</th>
               <th class="text-end">Value</th>
             </tr>
@@ -80,14 +223,25 @@
         </table>
       </div>
       <div class="d-flex justify-content-between align-items-center">
-        <button id="prevPage" class="btn btn-sm btn-outline-secondary" type="button">Previous</button>
+        <button
+          id="prevPage"
+          class="btn btn-sm btn-outline-secondary"
+          type="button"
+        >
+          Previous
+        </button>
         <span class="small text-secondary" id="pageInfo">Page 1</span>
-        <button id="nextPage" class="btn btn-sm btn-outline-secondary" type="button">Next</button>
+        <button
+          id="nextPage"
+          class="btn btn-sm btn-outline-secondary"
+          type="button"
+        >
+          Next
+        </button>
       </div>
     </div>
   </div>
 </div>
-{% endblock %}
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

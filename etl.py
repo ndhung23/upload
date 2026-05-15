@@ -220,8 +220,7 @@ def _prepare_flexible_columns(df, fiscal_year):
         df.columns = _make_unique_columns(df.columns)
 
     if "Type__1" in df.columns:
-        df["Type2"] = df["Type"]
-        df["Type"] = df["Type__1"]
+        df["Type2"] = df["Type__1"]
     elif "Type2" not in df.columns and "Type" in df.columns:
         df["Type2"] = df["Type"]
 
@@ -229,6 +228,17 @@ def _prepare_flexible_columns(df, fiscal_year):
         df["Country"] = df["Market"] if "Market" in df.columns else ""
 
     return df
+
+
+def _normalize_type2(value):
+    text = _clean_text(value).lower()
+    if "sensor" in text:
+        return "Sensor"
+    if "valve" in text:
+        return "Valve"
+    if "coil" in text:
+        return "Coil"
+    return "Sensor" if not text else _clean_text(value)
 
 
 def _extract_main_table(raw_df, file_path):
@@ -316,7 +326,7 @@ def _get_or_create_dim(model, key_col, value_col, value, cache):
     return dim_id, True
 
 
-def process_excel(file_path, upload_log_id=None):
+def process_excel(file_path, upload_log_id=None, actor=""):
     if not os.path.exists(file_path):
         raise ETLError("Uploaded file was not found")
 
@@ -347,6 +357,7 @@ def process_excel(file_path, upload_log_id=None):
 
     for dim_col in DIM_MAP:
         long_df[dim_col] = long_df[dim_col].apply(_clean_text)
+    long_df["Type2"] = long_df["Type2"].apply(_normalize_type2)
 
     valid_fact_mask = (
         (long_df["Part No."] != "")
@@ -395,6 +406,8 @@ def process_excel(file_path, upload_log_id=None):
                 "Month": row["Month"],
                 "Value": float(row["Value"]),
                 "UploadLogID": upload_log_id,
+                "updated_by": actor or "",
+                "updated_at": pd.Timestamp.utcnow().to_pydatetime().replace(tzinfo=None),
             }
 
             if existing:
@@ -406,6 +419,8 @@ def process_excel(file_path, upload_log_id=None):
                 updated += int(changed)
                 skipped += int(not changed)
             else:
+                payload["created_by"] = actor or ""
+                payload["created_at"] = pd.Timestamp.utcnow().to_pydatetime().replace(tzinfo=None)
                 db.session.add(FactETD(**payload))
                 inserted += 1
 

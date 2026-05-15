@@ -16,28 +16,31 @@
     <aside class="app-sidebar">
       <div class="brand">
         <div class="brand-mark">BI</div>
-        <div>
+        <div class="sidebar-label">
           <div class="brand-title">ETD Dashboard</div>
           <div class="brand-subtitle">Internal reporting</div>
         </div>
       </div>
+      <button id="sidebarToggle" class="btn btn-sm btn-outline-light sidebar-toggle" type="button" aria-label="Toggle sidebar">
+        <i class="bi bi-list"></i>
+      </button>
       <nav class="nav flex-column gap-1">
-        <a class="nav-link" href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
+        <a class="nav-link" href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-speedometer2"></i><span class="sidebar-label">Dashboard</span></a>
         {% if current_user.role in ['Admin', 'Manager'] %}
-        <a class="nav-link" href="{{ url_for('dashboard.upload_page') }}">Upload Excel</a>
-        <a class="nav-link" href="{{ url_for('dashboard.upload_history') }}">Upload History</a>
+        <a class="nav-link" href="{{ url_for('dashboard.upload_page') }}"><i class="bi bi-upload"></i><span class="sidebar-label">Upload Excel</span></a>
+        <a class="nav-link" href="{{ url_for('dashboard.upload_history') }}"><i class="bi bi-clock-history"></i><span class="sidebar-label">Upload History</span></a>
         {% endif %}
+        <a class="nav-link" href="{{ url_for('dashboard.data_explorer') }}"><i class="bi bi-table"></i><span class="sidebar-label">Data</span></a>
         {% if current_user.role == 'Admin' %}
-        <a class="nav-link" href="{{ url_for('dashboard.data_explorer') }}">Data Explorer</a>
-        <a class="nav-link" href="{{ url_for('auth.users') }}">Users</a>
+        <a class="nav-link" href="{{ url_for('auth.users') }}"><i class="bi bi-people"></i><span class="sidebar-label">Users</span></a>
         {% endif %}
       </nav>
       <div class="sidebar-footer">
-        <div class="small text-secondary">{{ current_user.username }} / {{ current_user.role }}</div>
-        <a class="btn btn-sm btn-outline-light w-100 mt-2" href="{{ url_for('auth.change_password') }}">Change Password</a>
+        <div class="small text-secondary sidebar-label">{{ current_user.username }} / {{ current_user.role }}</div>
+        <a class="btn btn-sm btn-outline-light w-100 mt-2" href="{{ url_for('auth.change_password') }}"><i class="bi bi-key"></i><span class="sidebar-label ms-1">Change Password</span></a>
         <form action="{{ url_for('auth.logout') }}" method="post" class="mt-2">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
-          <button class="btn btn-sm btn-outline-light w-100" type="submit">Logout</button>
+          <button class="btn btn-sm btn-outline-light w-100" type="submit"><i class="bi bi-box-arrow-right"></i><span class="sidebar-label ms-1">Logout</span></button>
         </form>
       </div>
     </aside>

@@ -1,89 +1,143 @@
 {% extends "base.html" %}
-{% block title %}Admin Data Explorer{% endblock %}
-{% block head %}
-<link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.css">
-{% endblock %}
+{% block title %}Data{% endblock %}
 {% block content %}
-<div class="page-head">
-  <h1>Admin Data Explorer</h1>
-  <p>Inspect SQLite tables and run SELECT-only queries.</p>
+<div class="page-head data-head">
+  <div>
+    <h1>Data</h1>
+    <p>Excel-like monthly entry. Edit month cells directly, or add a new data row.</p>
+  </div>
+  <span class="badge text-bg-light">Auto audit enabled</span>
 </div>
-<ul class="nav nav-tabs mb-3" role="tablist">
-  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tableTab" type="button">Tables</button></li>
-  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#sqlTab" type="button">SQL Console</button></li>
-</ul>
-<div class="tab-content">
-  <div class="tab-pane fade show active" id="tableTab">
-    <div class="row g-3">
-      <div class="col-lg-2">
-        <div class="filter-panel">
-          <div class="panel-title">Tables</div>
-          <div class="list-group table-list" id="tableList">
-            {% for table in tables %}
-            <button class="list-group-item list-group-item-action {% if loop.first %}active{% endif %}" data-table="{{ table }}" type="button">{{ table }}</button>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-10">
-        <div class="table-panel">
-          <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
-            <div>
-              <label class="form-label small">Search</label>
-              <input id="explorerSearch" class="form-control form-control-sm" placeholder="Search DIM/users text">
-            </div>
-            <div class="fact-filter">
-              <label class="form-label small">Month</label>
-              <input id="explorerMonth" class="form-control form-control-sm" placeholder="24-Apr">
-            </div>
-            <div class="fact-filter">
-              <label class="form-label small">CustomerID</label>
-              <input id="explorerCustomerID" class="form-control form-control-sm" type="number">
-            </div>
-            <div class="fact-filter">
-              <label class="form-label small">MarketID</label>
-              <input id="explorerMarketID" class="form-control form-control-sm" type="number">
-            </div>
-            <button id="explorerApply" class="btn btn-sm btn-primary" type="button">Apply</button>
-          </div>
-          <div id="explorerMeta" class="small text-secondary mb-2"></div>
-          <div class="table-responsive">
-            <table id="explorerTable" class="table table-sm table-hover align-middle w-100">
-              <thead><tr id="explorerHead"></tr></thead>
-              <tbody id="explorerBody"></tbody>
-            </table>
-          </div>
-          <div class="d-flex justify-content-between align-items-center">
-            <button id="explorerPrev" class="btn btn-sm btn-outline-secondary" type="button">Previous</button>
-            <span id="explorerPageInfo" class="small text-secondary"></span>
-            <button id="explorerNext" class="btn btn-sm btn-outline-secondary" type="button">Next</button>
-          </div>
-        </div>
-      </div>
+
+<div class="table-panel data-workspace">
+  <div class="data-toolbar data-toolbar-row1">
+    <div class="data-field data-file-field">
+      <label class="form-label small">File type</label>
+      <select id="dataFileCategoryFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Month from</label>
+      <select id="dataMonthFrom" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Month to</label>
+      <select id="dataMonthTo" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Year</label>
+      <select id="dataYearFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-toolbar-actions">
+      <button id="dataAddPart" class="btn btn-sm btn-primary" type="button"><i class="bi bi-plus-lg me-1"></i>Row</button>
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#columnCanvas">
+        <i class="bi bi-layout-three-columns"></i>
+      </button>
     </div>
   </div>
-  <div class="tab-pane fade" id="sqlTab">
-    <div class="form-panel">
-      <label class="form-label">SQL Console</label>
-      <textarea id="sqlInput" class="form-control sql-editor" rows="5">SELECT * FROM FACT_ETD LIMIT 100</textarea>
-      <div class="d-flex gap-2 mt-3">
-        <button id="runSql" class="btn btn-primary" type="button">Run SELECT</button>
-        <div id="sqlStatus" class="small text-secondary align-self-center"></div>
-      </div>
+
+  <div class="data-toolbar data-toolbar-row2">
+    <div class="data-field">
+      <label class="form-label small">Part No</label>
+      <input id="dataSearch" class="form-control form-control-sm" placeholder="Search part">
     </div>
-    <div class="table-panel mt-3">
-      <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle">
-          <thead><tr id="sqlHead"></tr></thead>
-          <tbody id="sqlBody"></tbody>
-        </table>
+    <div class="data-field">
+      <label class="form-label small">Customer</label>
+      <select id="dataCustomerFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Type</label>
+      <select id="dataTypeFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Laser</label>
+      <select id="dataLaserFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Country maker</label>
+      <select id="dataCountryMakerFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Car maker</label>
+      <select id="dataCarMakerFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Country</label>
+      <select id="dataCountryFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Market</label>
+      <select id="dataMarketFilter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-field">
+      <label class="form-label small">Type2</label>
+      <select id="dataType2Filter" class="form-select form-select-sm"></select>
+    </div>
+    <div class="data-toolbar-actions">
+      <button id="dataApply" class="btn btn-sm btn-primary" type="button">Apply</button>
+      <button id="dataClear" class="btn btn-sm btn-outline-secondary" type="button">Clear</button>
+    </div>
+  </div>
+
+  <div class="data-summary">
+    <div id="dataMeta" class="small text-secondary"></div>
+    <div class="small text-secondary">To add Jun-26, choose Month to = 26-Jun, then enter value in the new month cell.</div>
+  </div>
+
+  <div class="data-matrix-wrap">
+    <table class="table table-bordered table-sm data-matrix">
+      <thead id="dataHead"></thead>
+      <tbody id="dataBody"></tbody>
+    </table>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mt-2">
+    <button id="dataPrev" class="btn btn-sm btn-outline-secondary" type="button">Previous</button>
+    <span id="dataPageInfo" class="small text-secondary"></span>
+    <button id="dataNext" class="btn btn-sm btn-outline-secondary" type="button">Next</button>
+  </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="columnCanvas">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title">Visible columns</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div id="columnToggles" class="vstack gap-2"></div>
+  </div>
+</div>
+
+<div class="modal fade" id="partModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add new row</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="partForm" class="row g-2">
+          <div class="col-md-6"><label class="form-label small">File <span class="text-danger">*</span></label><select name="UploadLogID" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-6"><label class="form-label small">PartNo <span class="text-danger">*</span></label><input name="PartNo" class="form-control form-control-sm" required></div>
+          <div class="col-md-4"><label class="form-label small">Month</label><select name="Month" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-4"><label class="form-label small">Value</label><input name="Value" class="form-control form-control-sm" type="number" step="0.01" value="0"></div>
+          <div class="col-md-4"><label class="form-label small">Customer</label><select name="CustomerID" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-4"><label class="form-label small">Type</label><select name="TypeID" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-4"><label class="form-label small">Type2</label><select name="Type2ID" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-4"><label class="form-label small">Laser</label><select name="LaserID" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-4"><label class="form-label small">Country maker</label><select name="CountryOfMakerID" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-4"><label class="form-label small">Car maker</label><select name="CarMakerID" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-4"><label class="form-label small">Country</label><select name="CountryID" class="form-select form-select-sm" required></select></div>
+          <div class="col-md-4"><label class="form-label small">Market</label><select name="MarketID" class="form-select form-select-sm" required></select></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button id="partSave" type="button" class="btn btn-primary">Create</button>
       </div>
     </div>
   </div>
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="https://cdn.datatables.net/2.1.8/js/dataTables.js"></script>
-<script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.js"></script>
 <script src="{{ url_for('static', filename='js/data_explorer.js') }}"></script>
 {% endblock %}

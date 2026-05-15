@@ -1,6 +1,7 @@
 const state = {
   page: 1,
   perPage: 25,
+  chartType: "bar",
 };
 
 const moneyFormatter = new Intl.NumberFormat("en-US", {
@@ -23,13 +24,23 @@ function selectOptions(select, items, placeholder) {
 }
 
 function filters() {
+  const selectedFiles = [];
+  ["AP", "FC1", "FC2", "AP_LAST_YEAR", "ACTUAL_LAST_YEAR"].forEach(cat => {
+    const selector = `select[data-category="${cat}"]`;
+    const value = document.querySelector(selector)?.value;
+    if (value) selectedFiles.push(value);
+  });
+  
   return {
     upload_log_id: document.getElementById("uploadFilter").value,
+    file_ids: selectedFiles.join(","),
     compare_upload_id: document.getElementById("compareUploadFilter").value,
-    chart_type: document.getElementById("chartTypeFilter").value,
+    chart_type: state.chartType,
+    chart_group: document.getElementById("chartGroupFilter").value,
     fiscal_year: document.getElementById("fyFilter").value,
     customer_id: document.getElementById("customerFilter").value,
     type_id: document.getElementById("typeFilter").value,
+    type2_id: document.getElementById("type2Filter").value,
     country_id: document.getElementById("countryFilter").value,
     car_maker_id: document.getElementById("carMakerFilter").value,
     market_id: document.getElementById("marketFilter").value,
@@ -62,10 +73,25 @@ async function loadFilters() {
   });
   const data = await response.json();
   selectOptions(document.getElementById("uploadFilter"), data.uploads, "All uploaded files");
+  
+  // Group uploads by file category
+  const uploadsByCategory = {};
+  ["AP", "FC1", "FC2", "AP_LAST_YEAR", "ACTUAL_LAST_YEAR"].forEach(cat => {
+    uploadsByCategory[cat] = data.uploads.filter(u => u.category === cat || u.file_category === cat);
+  });
+  
+  // Populate each category dropdown
+  selectOptions(document.getElementById("filterAP"), uploadsByCategory["AP"] || [], "Select AP file");
+  selectOptions(document.getElementById("filterFC1"), uploadsByCategory["FC1"] || [], "Select FC1 file");
+  selectOptions(document.getElementById("filterFC2"), uploadsByCategory["FC2"] || [], "Select FC2 file");
+  selectOptions(document.getElementById("filterAPLastYear"), uploadsByCategory["AP_LAST_YEAR"] || [], "Select AP Last Year file");
+  selectOptions(document.getElementById("filterActualLastYear"), uploadsByCategory["ACTUAL_LAST_YEAR"] || [], "Select Actual Last Year file");
+  
   selectOptions(document.getElementById("compareUploadFilter"), data.uploads, "Compare with file");
   selectOptions(document.getElementById("fyFilter"), data.fiscal_years, "All fiscal years");
   selectOptions(document.getElementById("customerFilter"), data.customers, "All customers");
   selectOptions(document.getElementById("typeFilter"), data.types, "All types");
+  selectOptions(document.getElementById("type2Filter"), data.type2s, "All type2");
   selectOptions(document.getElementById("countryFilter"), data.countries, "All countries");
   selectOptions(document.getElementById("carMakerFilter"), data.car_makers, "All car makers");
   selectOptions(document.getElementById("marketFilter"), data.markets, "All markets");
@@ -86,21 +112,22 @@ function renderChart(chart) {
     responsive: true,
   };
 
-  if (chart.type === "pie") {
+  if (chart.type === "pie" || chart.type === "donut") {
     traces.push({
       labels: chart.pie_labels,
       values: chart.pie_values,
       type: "pie",
-      hole: 0.35,
+      hole: chart.type === "donut" ? 0.45 : 0,
       hovertemplate: "%{label}<br>%{value:,.0f}<extra></extra>",
     });
     layout.margin = { t: 20, r: 20, l: 20, b: 20 };
-  } else if (chart.type === "line") {
+  } else if (chart.type === "line" || chart.type === "area") {
     traces.push({
       x: chart.months,
       y: chart.values,
       type: "scatter",
       mode: "lines+markers",
+      fill: chart.type === "area" ? "tozeroy" : undefined,
       name: "Selected file",
       line: { color: "#2563eb", width: 3 },
       hovertemplate: "%{x}<br>%{y:,.0f}<extra></extra>",
@@ -116,18 +143,41 @@ function renderChart(chart) {
       });
     });
     layout.barmode = "stack";
-  } else {
+  } else if (chart.type === "hbar") {
     traces.push({
-      x: chart.months,
-      y: chart.values,
+      x: chart.pie_values,
+      y: chart.pie_labels,
       type: "bar",
-      name: "Selected file",
+      orientation: "h",
       marker: { color: "#2563eb" },
-      hovertemplate: "%{x}<br>%{y:,.0f}<extra></extra>",
+      hovertemplate: "%{y}<br>%{x:,.0f}<extra></extra>",
     });
+    layout.margin = { t: 20, r: 20, l: 140, b: 50 };
+  } else {
+    if (chart.default_series && chart.default_series.length) {
+      chart.default_series.forEach((series) => {
+        traces.push({
+          x: chart.default_months,
+          y: series.values,
+          type: "bar",
+          name: series.name,
+          hovertemplate: "%{x}<br>%{fullData.name}: %{y:,.0f}<extra></extra>",
+        });
+      });
+      layout.barmode = "group";
+    } else {
+      traces.push({
+        x: chart.months,
+        y: chart.values,
+        type: "bar",
+        name: "Selected file",
+        marker: { color: "#2563eb" },
+        hovertemplate: "%{x}<br>%{y:,.0f}<extra></extra>",
+      });
+    }
   }
 
-  if (chart.compare && chart.type !== "pie" && chart.type !== "yamazumi") {
+  if (chart.compare && !["pie", "donut", "yamazumi", "hbar", "area"].includes(chart.type)) {
     traces.push({
       x: chart.compare.months,
       y: chart.compare.values,
@@ -154,7 +204,7 @@ function renderTable(table) {
   body.innerHTML = "";
 
   if (!table.rows.length) {
-    body.innerHTML = `<tr><td colspan="8" class="text-center text-secondary py-4">No data</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" class="text-center text-secondary py-4">No data</td></tr>`;
   } else {
     table.rows.forEach((row) => {
       const tr = document.createElement("tr");
@@ -162,9 +212,11 @@ function renderTable(table) {
         <td>${row.PartNo}</td>
         <td>${row.Customer}</td>
         <td>${row.Type}</td>
+        <td>${row.Type2}</td>
         <td>${row.Country}</td>
         <td>${row.CarMaker}</td>
         <td>${row.Market}</td>
+        <td>${row.File}</td>
         <td>${row.Month}</td>
         <td class="text-end">${moneyFormatter.format(row.Value)}</td>`;
       body.appendChild(tr);
@@ -205,16 +257,36 @@ function bindEvents() {
     "customerFilter",
     "uploadFilter",
     "compareUploadFilter",
-    "chartTypeFilter",
+    "chartGroupFilter",
     "fyFilter",
     "typeFilter",
+    "type2Filter",
     "countryFilter",
     "carMakerFilter",
     "marketFilter",
     "monthFromFilter",
     "monthToFilter",
+    "filterAP",
+    "filterFC1",
+    "filterFC2",
+    "filterAPLastYear",
+    "filterActualLastYear",
   ].forEach((id) => {
-    document.getElementById(id).addEventListener("change", () => {
+    const elem = document.getElementById(id);
+    if (elem) {
+      elem.addEventListener("change", () => {
+        state.page = 1;
+        loadDashboard();
+      });
+    }
+  });
+
+  document.querySelectorAll(".chart-mode").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.chartType = button.dataset.chart;
+      if (!document.getElementById("chartGroupFilter").value && state.chartType !== "bar") {
+        document.getElementById("chartGroupFilter").value = "customer";
+      }
       state.page = 1;
       loadDashboard();
     });

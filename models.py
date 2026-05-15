@@ -18,6 +18,7 @@ class User(UserMixin, db.Model):
     password_plain = db.Column(db.String(255), nullable=False, default="")
     full_name = db.Column(db.String(160), nullable=False, default="")
     employee_code = db.Column(db.String(50), nullable=False, default="", index=True)
+    gender = db.Column(db.String(20), nullable=False, default="")
     role = db.Column(db.String(20), nullable=False, default="Staff")
     manager_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -105,6 +106,10 @@ class FactETD(db.Model):
     Month = db.Column(db.String(20), nullable=False, index=True)
     Value = db.Column(db.Float, nullable=False, default=0)
     UploadLogID = db.Column(db.Integer, db.ForeignKey("UPLOAD_LOGS.id"), nullable=True, index=True)
+    created_by = db.Column(db.String(80), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_by = db.Column(db.String(80), nullable=False, default="")
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     customer = db.relationship("DimCustomer")
     type = db.relationship("DimType")
@@ -123,6 +128,7 @@ class UploadLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
     stored_filename = db.Column(db.String(255), nullable=False, default="")
+    file_category = db.Column(db.String(30), nullable=False, default="")
     uploaded_by = db.Column(db.String(80), nullable=False, index=True)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     total_rows = db.Column(db.Integer, nullable=False, default=0)
@@ -132,6 +138,18 @@ class UploadLog(db.Model):
     invalid_rows = db.Column(db.Integer, nullable=False, default=0)
     status = db.Column(db.String(20), nullable=False, default="success")
     message = db.Column(db.Text, nullable=False, default="")
+
+
+class DataChangeLog(db.Model):
+    __tablename__ = "DATA_CHANGE_LOGS"
+
+    id = db.Column(db.Integer, primary_key=True)
+    table_name = db.Column(db.String(80), nullable=False, index=True)
+    row_id = db.Column(db.String(80), nullable=False, default="")
+    action = db.Column(db.String(20), nullable=False)
+    changed_by = db.Column(db.String(80), nullable=False, index=True)
+    changed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    detail = db.Column(db.Text, nullable=False, default="")
 
 
 def ensure_schema():
@@ -153,6 +171,7 @@ def ensure_schema():
                             password_plain VARCHAR(255) DEFAULT '' NOT NULL,
                             full_name VARCHAR(160) DEFAULT '' NOT NULL,
                             employee_code VARCHAR(50) DEFAULT '' NOT NULL,
+                            gender VARCHAR(20) DEFAULT '' NOT NULL,
                             role VARCHAR(20) DEFAULT 'Staff' NOT NULL,
                             manager_id INTEGER,
                             created_at DATETIME NOT NULL,
@@ -166,8 +185,8 @@ def ensure_schema():
                     text(
                         f"""
                         INSERT OR IGNORE INTO users_migrated
-                        (id, username, password_hash, password_plain, full_name, employee_code, role, manager_id, created_at, is_active)
-                        SELECT id, username, password_hash, '', {full_name_expr}, '', role, NULL, {created_expr}, {active_expr}
+                        (id, username, password_hash, password_plain, full_name, employee_code, gender, role, manager_id, created_at, is_active)
+                        SELECT id, username, password_hash, '', {full_name_expr}, '', '', role, NULL, {created_expr}, {active_expr}
                         FROM users
                         """
                     )
@@ -187,6 +206,8 @@ def ensure_schema():
             if "employee_code" not in user_columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN employee_code VARCHAR(50) DEFAULT '' NOT NULL"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_employee_code ON users (employee_code)"))
+            if "gender" not in user_columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN gender VARCHAR(20) DEFAULT '' NOT NULL"))
             if "manager_id" not in user_columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN manager_id INTEGER"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_manager_id ON users (manager_id)"))
@@ -203,6 +224,8 @@ def ensure_schema():
         with db.engine.begin() as conn:
             if "stored_filename" not in log_columns:
                 conn.execute(text("ALTER TABLE UPLOAD_LOGS ADD COLUMN stored_filename VARCHAR(255) DEFAULT '' NOT NULL"))
+            if "file_category" not in log_columns:
+                conn.execute(text("ALTER TABLE UPLOAD_LOGS ADD COLUMN file_category VARCHAR(30) DEFAULT '' NOT NULL"))
             if "invalid_rows" not in log_columns:
                 conn.execute(text("ALTER TABLE UPLOAD_LOGS ADD COLUMN invalid_rows INTEGER DEFAULT 0 NOT NULL"))
             if "message" not in log_columns:
@@ -243,7 +266,7 @@ def ensure_schema():
                             FOREIGN KEY("CountryID") REFERENCES "DIM_Country" ("CountryID"),
                             FOREIGN KEY("MarketID") REFERENCES "DIM_Market" ("MarketID"),
                             FOREIGN KEY("Type2ID") REFERENCES "DIM_Type2" ("Type2ID"),
-                            FOREIGN KEY("UploadLogID") REFERENCES "UPLOAD_LOGS" (id)
+            FOREIGN KEY("UploadLogID") REFERENCES "UPLOAD_LOGS" (id)
                         )
                         """
                     )
@@ -266,6 +289,19 @@ def ensure_schema():
                 conn.execute(text('CREATE INDEX IF NOT EXISTS ix_FACT_ETD_PartNo ON FACT_ETD ("PartNo")'))
                 conn.execute(text('CREATE INDEX IF NOT EXISTS ix_FACT_ETD_Month ON FACT_ETD ("Month")'))
                 conn.execute(text('CREATE INDEX IF NOT EXISTS ix_FACT_ETD_UploadLogID ON FACT_ETD ("UploadLogID")'))
+
+        fact_columns = {column["name"] for column in inspect(db.engine).get_columns("FACT_ETD")}
+        with db.engine.begin() as conn:
+            if "created_by" not in fact_columns:
+                conn.execute(text("ALTER TABLE FACT_ETD ADD COLUMN created_by VARCHAR(80) DEFAULT '' NOT NULL"))
+            if "created_at" not in fact_columns:
+                conn.execute(text("ALTER TABLE FACT_ETD ADD COLUMN created_at DATETIME"))
+                conn.execute(text("UPDATE FACT_ETD SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+            if "updated_by" not in fact_columns:
+                conn.execute(text("ALTER TABLE FACT_ETD ADD COLUMN updated_by VARCHAR(80) DEFAULT '' NOT NULL"))
+            if "updated_at" not in fact_columns:
+                conn.execute(text("ALTER TABLE FACT_ETD ADD COLUMN updated_at DATETIME"))
+                conn.execute(text("UPDATE FACT_ETD SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
 
 
 def seed_admin():
@@ -294,6 +330,7 @@ def seed_admin():
                 password_plain=password,
                 full_name=full_name,
                 employee_code=employee_code,
+                gender="",
                 role=role,
                 manager_id=manager_id,
                 is_active=True,

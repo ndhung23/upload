@@ -74,9 +74,42 @@ def logout():
 @auth_bp.route("/users")
 @role_required("Admin")
 def users():
-    rows = User.query.order_by(User.username.asc()).all()
+    page = max(request.args.get("page", 1, type=int), 1)
+    per_page = min(max(request.args.get("per_page", 10, type=int), 5), 50)
+    search = request.args.get("search", "").strip()
+    role = request.args.get("role", "").strip()
+    gender = request.args.get("gender", "").strip()
+    status = request.args.get("status", "").strip()
+
+    query = User.query
+    if search:
+        pattern = f"%{search}%"
+        query = query.filter(
+            (User.username.ilike(pattern))
+            | (User.full_name.ilike(pattern))
+            | (User.employee_code.ilike(pattern))
+        )
+    if role in ROLES:
+        query = query.filter(User.role == role)
+    if gender:
+        query = query.filter(User.gender == gender)
+    if status == "active":
+        query = query.filter(User.is_active.is_(True))
+    elif status == "inactive":
+        query = query.filter(User.is_active.is_(False))
+
+    pagination = query.order_by(User.username.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    rows = pagination.items
     managers = User.query.filter(User.role.in_(["Admin", "Manager"]), User.is_active.is_(True)).order_by(User.username.asc()).all()
-    return render_template("users.html", users=rows, roles=ROLES, managers=managers)
+    return render_template(
+        "users.html",
+        users=rows,
+        roles=ROLES,
+        managers=managers,
+        pagination=pagination,
+        filters={"search": search, "role": role, "gender": gender, "status": status, "per_page": per_page},
+        genders=["Male", "Female", "Other"],
+    )
 
 
 @auth_bp.route("/users/create", methods=["POST"])
@@ -87,6 +120,7 @@ def create_user():
     full_name = request.form.get("full_name", "").strip()
     employee_code = request.form.get("employee_code", "").strip()
     role = request.form.get("role", "Staff")
+    gender = request.form.get("gender", "").strip()
     manager_id = request.form.get("manager_id", type=int)
 
     if not username or not password or role not in ROLES:
@@ -104,6 +138,7 @@ def create_user():
             full_name=full_name,
             employee_code=employee_code,
             role=role,
+            gender=gender,
             manager_id=manager_id if manager_id else None,
             is_active=True,
         )
@@ -128,6 +163,7 @@ def update_user(user_id):
     user.role = role
     user.full_name = request.form.get("full_name", "").strip()
     user.employee_code = request.form.get("employee_code", "").strip()
+    user.gender = request.form.get("gender", "").strip()
     manager_id = request.form.get("manager_id", type=int)
     user.manager_id = manager_id if manager_id and manager_id != user.id else None
     user.is_active = request.form.get("is_active") == "on"

@@ -13,6 +13,41 @@
 
 <div class="table-panel">
   <div class="panel-title">Accounts</div>
+  <form class="row g-2 align-items-end mb-3" method="get" action="{{ url_for('auth.users') }}">
+    <div class="col-md-4">
+      <label class="form-label small">Search</label>
+      <input class="form-control form-control-sm" name="search" value="{{ filters.search }}" placeholder="Username, name, code">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small">Role</label>
+      <select class="form-select form-select-sm" name="role">
+        <option value="">All roles</option>
+        {% for role in roles %}
+        <option value="{{ role }}" {% if filters.role == role %}selected{% endif %}>{{ role }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small">Gender</label>
+      <select class="form-select form-select-sm" name="gender">
+        <option value="">All genders</option>
+        {% for gender in genders %}
+        <option value="{{ gender }}" {% if filters.gender == gender %}selected{% endif %}>{{ gender }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small">Status</label>
+      <select class="form-select form-select-sm" name="status">
+        <option value="">All status</option>
+        <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>Inactive</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button class="btn btn-sm btn-primary w-100" type="submit">Apply</button>
+    </div>
+  </form>
   {% for user in users %}
   <form id="update-user-{{ user.id }}" method="post" action="{{ url_for('auth.update_user', user_id=user.id) }}"></form>
   {% endfor %}
@@ -23,6 +58,7 @@
           <th>ID</th>
           <th>Username</th>
           <th>Code</th>
+          <th>Gender</th>
           <th>Full Name</th>
           <th>Role</th>
           <th>Manager</th>
@@ -38,6 +74,14 @@
           <td>{{ user.username }}</td>
           <td>
             <input form="update-user-{{ user.id }}" class="form-control form-control-sm" name="employee_code" value="{{ user.employee_code }}">
+          </td>
+          <td>
+            <select form="update-user-{{ user.id }}" class="form-select form-select-sm" name="gender">
+              <option value=""></option>
+              {% for gender in genders %}
+              <option value="{{ gender }}" {% if user.gender == gender %}selected{% endif %}>{{ gender }}</option>
+              {% endfor %}
+            </select>
           </td>
           <td>
             <input form="update-user-{{ user.id }}" class="form-control form-control-sm" name="full_name" value="{{ user.full_name }}">
@@ -84,6 +128,11 @@
       </tbody>
     </table>
   </div>
+  <div class="d-flex justify-content-between align-items-center">
+    <a class="btn btn-sm btn-outline-secondary {% if not pagination.has_prev %}disabled{% endif %}" href="{{ url_for('auth.users', page=pagination.prev_num, search=filters.search, role=filters.role, gender=filters.gender, status=filters.status, per_page=filters.per_page) }}">Previous</a>
+    <span class="small text-secondary">Page {{ pagination.page }} / {{ pagination.pages or 1 }} · {{ pagination.total }} users</span>
+    <a class="btn btn-sm btn-outline-secondary {% if not pagination.has_next %}disabled{% endif %}" href="{{ url_for('auth.users', page=pagination.next_num, search=filters.search, role=filters.role, gender=filters.gender, status=filters.status, per_page=filters.per_page) }}">Next</a>
+  </div>
 </div>
 
 <div class="modal fade" id="createUserModal" tabindex="-1" aria-hidden="true">
@@ -99,6 +148,12 @@
           <input class="form-control" name="username" placeholder="Username" required>
           <input class="form-control" name="full_name" placeholder="Full name">
           <input class="form-control" name="employee_code" placeholder="Employee code">
+          <select class="form-select" name="gender">
+            <option value="">Gender</option>
+            {% for gender in genders %}
+            <option value="{{ gender }}">{{ gender }}</option>
+            {% endfor %}
+          </select>
           <input class="form-control" type="password" name="password" placeholder="Password" required>
           <select class="form-select" name="role">
             {% for role in roles %}
